@@ -54,8 +54,9 @@ input[type=checkbox]{width:20px;height:20px;padding:0;-webkit-appearance:checkbo
 var MESI=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 var GG=['','lun','mar','mer','gio','ven','sab','dom'];
 var TIPI=['Eccesso di velocità','Guida senza scheda tachigrafica','Superamento limiti di guida','Pausa di 45 minuti violata','Altra infrazione'];
-var KEY='guida_v1',db={g:{},inf:[],s:{h168:168,notti:64,scad:56,prev:7}};
-try{var raw=localStorage.getItem(KEY);if(raw){var x0=JSON.parse(raw);if(x0&&x0.g&&x0.inf&&x0.s)db=x0}}catch(e){}
+var KEY='guida_v2',db={g:[],inf:[],s:{h168:168,notti:64,scad:56,prev:7}};
+function norm(x){if(x&&x.g&&!Array.isArray(x.g)){x.g=Object.keys(x.g).sort().map(function(d,i){var e=x.g[d];e.d=d;e.id=e.id||(i+1);return e})}return x}
+try{var raw=localStorage.getItem(KEY);if(raw){var x0=JSON.parse(raw);x0=norm(x0);if(x0&&Array.isArray(x0.g)&&x0.inf&&x0.s)db=x0}}catch(e){}
 var $=function(s){return document.querySelector(s)};
 var ui={form:false,ed:null,inf:false,ied:null,tab:'giorni'};
 function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){toast('Salvataggio non riuscito: fai un backup')}}
@@ -78,39 +79,40 @@ var cur=today().slice(0,7);
 function shift(k,n){var y=+k.slice(0,4),m=+k.slice(5)-1+n;y+=Math.floor(m/12);m=((m%12)+12)%12;return y+'-'+pad(m+1)}
 function mlabel(k){return MESI[+k.slice(5)-1]+' '+k.slice(0,4)}
 function nav(){return '<div class="nav"><button class="ib" data-m="-1">‹</button><b>'+mlabel(cur)+'</b><button class="ib" data-m="1">›</button></div>'}
-function keysOf(k){return Object.keys(db.g).filter(function(d){return d.indexOf(k)===0}).sort()}
+function entsOf(k){return db.g.filter(function(e){return e.d.indexOf(k)===0}).sort(function(a,b){return a.d.localeCompare(b.d)||(a.i||'').localeCompare(b.i||'')})}
+function byId(id){return db.g.filter(function(e){return e.id===id})[0]}
 function ov(a,b,c,d){return Math.max(0,Math.min(b,d)-Math.max(a,c))}
 function us(e){var w=worked(e);if(w==null)return null;var s=th(e.i),t=s+w,F=ov(s,t,0,5)+ov(s,t,24,29);return{F:F,t:(w>=6-1e-9&&F>=5-1e-9)?1:0,f:F>=3-1e-9?1:0}}
-function gsum(a,b){var s=0;for(var n=a;n<=b;n++){var e=db.g[fromDn(n)];if(e)s+=gm(e)}return s}
-function mstats(k){var o={ore:0,nf:0,sab:0,gl:0,km:0,tu:0,fi:0,fa:0,g:0};keysOf(k).forEach(function(d){var e=db.g[d],w=worked(e),u=us(e);if(e.nf)o.nf++;o.km+=+e.k||0;o.g+=gm(e);if(w!=null&&w>0){o.ore+=w;o.gl++;if(wd(d)===6)o.sab++}if(u){o.tu+=u.t;o.fi+=u.f;o.fa+=u.F}});return o}
+function gsum(a,b){var s=0;db.g.forEach(function(e){var n=dn(e.d);if(n>=a&&n<=b)s+=gm(e)});return s}
+function mstats(k){var o={ore:0,nf:0,sab:0,gl:0,km:0,tu:0,fi:0,fa:0,g:0},seen={};entsOf(k).forEach(function(e){var w=worked(e),u=us(e);if(e.nf)o.nf++;o.km+=+e.k||0;o.g+=gm(e);if(w!=null&&w>0){o.ore+=w;if(!seen[e.d]){seen[e.d]=1;o.gl++;if(wd(e.d)===6)o.sab++}}if(u){o.tu+=u.t;o.fi+=u.f;o.fa+=u.F}});return o}
 
 /* ---- GIORNI ---- */
-function dayRow(k){var e=db.g[k],w=worked(e),dest=e.a?e.a+(e.z?' · '+e.z:''):(e.p||'—');
+function dayRow(e){var w=worked(e),dest=e.a?e.a+(e.z?' · '+e.z:''):(e.p||'—');
  var l2=w!=null?e.i.slice(0,5)+'–'+e.o.slice(0,5)+(e.gd?' · guida '+e.gd:'')+(e.nf?' · notte fuori':''):(e.nf?'notte fuori':'');
- return '<div class="row tap" data-ed="'+k+'"><div class="l"><div>'+dm(k)+' '+GG[wd(k)]+' · '+esc(dest)+(e.pr?' <span class="bad">●</span>':'')+'</div>'+(l2?'<div class="mu">'+l2+'</div>':'')+'</div><div class="r">'+(w!=null?hrs(w):'')+'</div></div>'}
-function formDay(){return '<div class="card"><h2>'+(ui.ed?'Modifica giorno':'Nuovo giorno')+'</h2><label>Data</label><input id="fd" type="date"><label>Targa</label><input id="ft"><label>Partenza</label><input id="fp"><label>Arrivo</label><input id="fa"><label>Tipologia merce</label><input id="fm"><label>Azienda (ritorno scarico/carico)</label><input id="fz"><label>Km</label><input id="fk" inputmode="numeric"><label>Ora entrata</label><input id="fi" type="time" step="1"><label>Ora uscita</label><input id="fo" type="time" step="1"><label>Guida giornaliera (h:mm)</label><input id="fgd" placeholder="es. 8:09"><label>Spesa lavorativa (€)</label><input id="fsp" inputmode="decimal"><label>Note</label><input id="fn"><div class="ck"><input id="fnf" type="checkbox"><span>Notte fuori</span></div><div class="ck"><input id="fpr" type="checkbox"><span>Azienda problematica</span></div><button class="btn" id="sg">Salva giorno</button>'+(ui.ed?'<button class="btn d" id="dg">Elimina giorno</button>':'')+'<button class="btn s" id="cg">Annulla</button></div>'}
-function fillDay(d){var e=db.g[d]||{};$('#fd').value=d;[['t','ft'],['p','fp'],['a','fa'],['m','fm'],['z','fz'],['k','fk'],['i','fi'],['o','fo'],['gd','fgd'],['sp','fsp'],['n','fn']].forEach(function(p){$('#'+p[1]).value=e[p[0]]==null?'':e[p[0]]});$('#fnf').checked=!!e.nf;$('#fpr').checked=!!e.pr}
-function renderGiorni(){var ks=keysOf(cur),st=mstats(cur),h=nav();
- h+='<div class="card"><div class="g"><div><b>'+st.gl+'</b><span>giorni lavorati</span></div><div><b>'+hrs(st.ore)+'</b><span>ore lavorate</span></div></div>'+(ui.form?'':'<button class="btn" id="ng">+ Giorno</button>')+'</div>';
+ return '<div class="row tap" data-ed="'+e.id+'"><div class="l"><div>'+dm(e.d)+' '+GG[wd(e.d)]+' · '+esc(dest)+(e.pr?' <span class="bad">●</span>':'')+'</div>'+(l2?'<div class="mu">'+l2+'</div>':'')+'</div><div class="r">'+(w!=null?hrs(w):'')+'</div></div>'}
+function formDay(){return '<div class="card"><h2>'+(ui.ed!=null?'Modifica viaggio':'Nuovo viaggio')+'</h2><label>Data</label><input id="fd" type="date"><label>Targa</label><input id="ft"><label>Partenza</label><input id="fp"><label>Arrivo</label><input id="fa"><label>Tipologia merce</label><input id="fm"><label>Azienda (ritorno scarico/carico)</label><input id="fz"><label>Km</label><input id="fk" inputmode="numeric"><label>Ora entrata</label><input id="fi" type="time" step="1"><label>Ora uscita</label><input id="fo" type="time" step="1"><label>Guida giornaliera (h:mm)</label><input id="fgd" placeholder="es. 8:09"><label>Spesa lavorativa (€)</label><input id="fsp" inputmode="decimal"><label>Note</label><input id="fn"><div class="ck"><input id="fnf" type="checkbox"><span>Notte fuori</span></div><div class="ck"><input id="fpr" type="checkbox"><span>Azienda problematica</span></div><button class="btn" id="sg">Salva</button>'+(ui.ed!=null?'<button class="btn d" id="dg">Elimina</button>':'')+'<button class="btn s" id="cg">Annulla</button></div>'}
+function fillDay(){var e=ui.ed!=null?byId(ui.ed):{d:ui.fd};e=e||{d:ui.fd};$('#fd').value=e.d||ui.fd;[['t','ft'],['p','fp'],['a','fa'],['m','fm'],['z','fz'],['k','fk'],['i','fi'],['o','fo'],['gd','fgd'],['sp','fsp'],['n','fn']].forEach(function(p){$('#'+p[1]).value=e[p[0]]==null?'':e[p[0]]});$('#fnf').checked=!!e.nf;$('#fpr').checked=!!e.pr}
+function renderGiorni(){var ks=entsOf(cur),st=mstats(cur),h=nav();
+ h+='<div class="card"><div class="g"><div><b>'+st.gl+'</b><span>giorni lavorati</span></div><div><b>'+hrs(st.ore)+'</b><span>ore lavorate</span></div></div>'+(ui.form?'':'<button class="btn" id="ng">+ Viaggio</button>')+'</div>';
  if(ui.form)h+=formDay();
- h+='<div class="card"><h2>Registro ('+ks.length+')</h2>';
- if(!ks.length)h+='<div class="mu">Nessun giorno in questo mese.</div>';
- ks.slice().reverse().forEach(function(k){h+=dayRow(k)});
+ h+='<div class="card"><h2>Viaggi ('+ks.length+')</h2>';
+ if(!ks.length)h+='<div class="mu">Nessun viaggio in questo mese.</div>';
+ ks.slice().reverse().forEach(function(e){h+=dayRow(e)});
  $('#v-giorni').innerHTML=h+'</div>';
- if(ui.form)fillDay(ui.fd)}
+ if(ui.form)fillDay()}
 
 /* ---- GUIDA ---- */
-function renderGuida(){var ks=keysOf(cur),h=nav(),tg=0,tw=0;
- ks.forEach(function(k){var e=db.g[k],w=worked(e);tg+=gm(e);if(w)tw+=w});
+function renderGuida(){var ks=entsOf(cur),h=nav(),tg=0,tw=0,days={};
+ ks.forEach(function(e){var w=worked(e),o=days[e.d]||(days[e.d]={g:0,w:0,i:null,o:null});tg+=gm(e);o.g+=gm(e);if(w!=null){tw+=w;o.w+=w}if(e.i&&(o.i==null||e.i<o.i))o.i=e.i;if(e.o)o.o=e.o});
  h+='<div class="card"><div class="mu">Guida del mese</div><div class="big">'+hm(tg)+'</div><div class="mu">su '+hrs(tw)+' ore lavorate'+(tw>0&&tg>0?' ('+Math.round(tg/60/tw*100)+'% guida)':'')+'</div></div>';
  var first=dn(cur+'-01'),last=dn(shift(cur,1)+'-01')-1,mon=first-wd(cur+'-01')+1,wk='';
  for(var n=mon;n<=last;n+=7){var s=gsum(n,n+6);if(!s)continue;var b=gsum(n-7,n+6),ws=s>3360,wb=b>5400;
   wk+='<div style="margin-bottom:18px"><div class="row" style="border:0;padding:0"><span>'+dm(fromDn(n))+' – '+dm(fromDn(n+6))+'</span><span class="'+(ws?'bad':'')+'">'+hm(s)+' / 56:00</span></div><div class="bar"><i class="'+(ws?'bad':'')+'" style="width:'+Math.min(100,s/3360*100)+'%"></i></div><div class="row" style="border:0;padding:6px 0 0"><span class="mu">2 settimane</span><span class="mu '+(wb?'bad':'')+'">'+hm(b)+' / 90:00'+(ws?' · SUPERATA 56 h':'')+(wb?' · SUPERATA 90 h':'')+'</span></div></div>'}
  h+='<div class="card"><h2>Settimane (lun–dom)</h2>'+(wk||'<div class="mu">Nessuna guida inserita.</div>')+'</div>';
  h+='<div class="card"><h2>Giorni con guida</h2>';var any=false;
- ks.slice().reverse().forEach(function(k){var e=db.g[k],g=gm(e);if(!g)return;any=true;var w=worked(e),m0=dn(k)-wd(k)+1,c10=0;for(var i=0;i<7;i++){var e2=db.g[fromDn(m0+i)];if(e2&&gm(e2)>540)c10++}
+ Object.keys(days).sort().reverse().forEach(function(k){var o=days[k],g=o.g;if(!g)return;any=true;var m0=dn(k)-wd(k)+1,c10=0;for(var i=0;i<7;i++){if(gsum(m0+i,m0+i)>540)c10++}
   var es=g>600?'<span class="bad">oltre 10 h</span>':g>540?(c10>2?'<span class="bad">10 h: '+c10+' volte nella settimana</span>':'10 h ('+c10+'/2 nella settimana)'):'<span class="ok">entro 9 h</span>';
-  h+='<div class="row"><div class="l"><div>'+dm(k)+' '+GG[wd(k)]+' · '+hm(g)+'</div><div class="mu">'+(w!=null?'su '+hrs(w)+' lavorate · '+Math.round(g/60/w*100)+'% · entrata '+e.i.slice(0,5)+' · uscita '+e.o.slice(0,5):'orari non inseriti')+'</div></div><div class="r mu">'+es+'</div></div>'});
+  h+='<div class="row"><div class="l"><div>'+dm(k)+' '+GG[wd(k)]+' · '+hm(g)+'</div><div class="mu">'+(o.w>0?'su '+hrs(o.w)+' lavorate · '+Math.round(g/60/o.w*100)+'% · entrata '+o.i.slice(0,5)+(o.o?' · uscita '+o.o.slice(0,5):''):'orari non inseriti')+'</div></div><div class="r mu">'+es+'</div></div>'});
  if(!any)h+='<div class="mu">Nessuna guida inserita.</div>';
  h+='</div><div class="mu">Controllo orientativo dei soli tempi di guida inseriti: non verifica pause, riposi, guida continuativa o deroghe. Controlla sempre con il tachigrafo.</div>';
  $('#v-guida').innerHTML=h}
@@ -121,7 +123,7 @@ function renderMese(){var st=mstats(cur),h=nav(),T=db.s.h168,ecc=Math.max(0,st.o
  h+='<div class="g" style="margin-top:22px"><div><b>'+st.nf+'</b><span>notti fuori</span></div><div><b>'+st.sab+'</b><span>sabati lavorati</span></div><div><b>'+st.gl+'</b><span>giorni lavorati</span></div><div><b>'+nf(st.km,0)+'</b><span>km</span></div></div></div>';
  h+='<div class="card"><h2>Tempo usurante · '+mlabel(cur)+'</h2><div class="g"><div><b>'+st.tu+'</b><span>notti a turni</span></div><div><b>'+st.fi+'</b><span>notti fisse</span></div><div><b>'+hrs(st.fa)+'</b><span>ore 00–05</span></div></div></div>';
  var yt=0,rows='';
- for(var m=1;m<=12;m++){var k=yr+'-'+pad(m),s2=mstats(k);yt+=s2.tu;if(!keysOf(k).length)continue;var e2=Math.max(0,s2.ore-T);rows+='<div class="row"><span>'+MESI[m-1]+'</span><span class="'+(e2>0?'bad':'')+'">'+hrs(s2.ore)+' · '+s2.nf+' notti · '+s2.tu+' usur.</span></div>'}
+ for(var m=1;m<=12;m++){var k=yr+'-'+pad(m),s2=mstats(k);yt+=s2.tu;if(!entsOf(k).length)continue;var e2=Math.max(0,s2.ore-T);rows+='<div class="row"><span>'+MESI[m-1]+'</span><span class="'+(e2>0?'bad':'')+'">'+hrs(s2.ore)+' · '+s2.nf+' notti · '+s2.tu+' usur.</span></div>'}
  var N=db.s.notti;
  h+='<div class="card"><h2>Notti usuranti a turni · '+yr+'</h2><div class="big">'+yt+' <span style="font-size:20px;color:var(--mu)">/ '+N+'</span></div><div class="bar"><i style="width:'+Math.min(100,yt/N*100)+'%"></i></div><div class="mu" style="margin-top:8px">'+(yt>=N?'<span class="ok">SOGLIA RAGGIUNTA</span>':'Mancano '+(N-yt)+' notti alla soglia')+'</div><div class="mu" style="margin-top:6px">Notte a turni: almeno 6 ore consecutive di lavoro e 5 ore nella fascia 00:00–05:00. Notte fissa: almeno 3 ore nella fascia.</div></div>';
  h+='<div class="card"><h2>Mesi del '+yr+'</h2>'+(rows||'<div class="mu">Nessun dato.</div>')+'</div>';
@@ -141,17 +143,17 @@ function renderAltro(){var h='',ls=db.inf.slice().sort(function(a,b){return b.d.
  ls.forEach(function(x){var s=infst(x),p=infpt(x),det=x.tp===TIPI[0]?(x.v!==''&&x.v!=null?x.v+' km/h'+(x.li!==''&&x.li!=null?' su '+x.li+' · eccesso reale '+nf(p.ecc,0)+' km/h':' · limite mancante'):'valore mancante'):'';
   h+='<div class="row tap" data-ie="'+x.id+'"><div class="l"><div>'+dmy(x.d)+' · '+esc(x.tp)+'</div><div class="mu">'+esc(x.lu||'')+(det?' · '+det:'')+(p.pt?' · '+p.pt+' punti':'')+'</div><div class="mu">scade '+dmy(s.sc)+(s.st==='CHIUSA'?'':' ('+s.left+' giorni)')+'</div></div><div class="r '+(s.st==='SCADUTA'||s.st==='IN SCADENZA'?'bad':s.st==='CHIUSA'?'mu':'')+'">'+s.st+'</div></div>'});
  h+='</div>';
- var az={};Object.keys(db.g).sort().forEach(function(d){var e=db.g[d];if(!e.pr)return;var n=(e.z||e.a||'Senza nome').trim()||'Senza nome';(az[n]=az[n]||[]).push(d)});
+ var az={};db.g.slice().sort(function(a,b){return a.d.localeCompare(b.d)}).forEach(function(e){var d=e.d;if(!e.pr)return;var n=(e.z||e.a||'Senza nome').trim()||'Senza nome';(az[n]=az[n]||[]).push(e)});
  var names=Object.keys(az).sort(function(a,b){return az[b].length-az[a].length});
  h+='<div class="card"><h2>Aziende segnalate</h2>';
- if(!names.length)h+='<div class="mu">Nessuna azienda segnalata. Segna un giorno come “azienda problematica” dalla scheda Giorni.</div>';
- names.forEach(function(n){h+='<div class="row" style="align-items:flex-start"><div class="l"><div>'+esc(n)+'</div><div class="mu">'+az[n].map(function(d){var nt=db.g[d].n;return dm(d)+(nt?' · '+esc(nt):'')}).join('<br>')+'</div></div><div class="r">'+az[n].length+'</div></div>'});
+ if(!names.length)h+='<div class="mu">Nessuna azienda segnalata. Segna un viaggio come “azienda problematica” dalla scheda Giorni.</div>';
+ names.forEach(function(n){h+='<div class="row" style="align-items:flex-start"><div class="l"><div>'+esc(n)+'</div><div class="mu">'+az[n].map(function(e){return dm(e.d)+(e.n?' · '+esc(e.n):'')}).join('<br>')+'</div></div><div class="r">'+az[n].length+'</div></div>'});
  $('#v-altro').innerHTML=h+'</div>';if(ui.inf)fillInf()}
 
 /* ---- DATI ---- */
 function renderDati(){var s=db.s,h='<div class="card"><h2>Soglie</h2><label>Ore mensili massime</label><input id="s1" inputmode="numeric" value="'+s.h168+'"><label>Notti usuranti a turni (soglia annua)</label><input id="s2" inputmode="numeric" value="'+s.notti+'"><label>Giorni alla scadenza infrazione</label><input id="s3" inputmode="numeric" value="'+s.scad+'"><label>Preavviso scadenza (giorni)</label><input id="s4" inputmode="numeric" value="'+s.prev+'"><button class="btn s" id="ss">Salva soglie</button><div class="mu" style="margin-top:12px">Limiti di guida usati: 9 h al giorno (10 h al massimo 2 volte a settimana), 56 h a settimana, 90 h in 2 settimane.</div></div>';
  h+='<div class="card"><h2>Backup</h2><div class="mu">I dati restano solo su questo telefono. Fai ogni tanto un backup e salvalo nell\'app File.</div><button class="btn s" id="ex">Esporta backup (.json)</button><button class="btn s" id="im">Importa backup</button><input type="file" id="fi2" accept=".json,application/json" class="hid"></div>';
- h+='<div class="card"><button class="btn d" id="rs">Cancella tutti i dati</button></div><div class="mu" style="text-align:center">'+Object.keys(db.g).length+' giorni · '+db.inf.length+' infrazioni</div>';
+ h+='<div class="card"><button class="btn d" id="rs">Cancella tutti i dati</button></div><div class="mu" style="text-align:center">'+db.g.length+' viaggi · '+db.inf.length+' infrazioni</div>';
  $('#v-dati').innerHTML=h}
 
 function render(){({giorni:renderGiorni,guida:renderGuida,mese:renderMese,altro:renderAltro,dati:renderDati})[ui.tab]()}
@@ -167,16 +169,15 @@ document.addEventListener('click',function(e){
  var t=e.target.closest('[data-t],[data-m],[data-ed],[data-ie],button')||e.target,d=t.dataset||{};
  if(d.t)return tab(d.t);
  if(d.m){cur=shift(cur,+d.m);ui.form=false;return render()}
- if(d.ed){ui.form=true;ui.ed=d.ed;ui.fd=d.ed;renderGiorni();return window.scrollTo(0,0)}
+ if(d.ed){ui.form=true;ui.ed=+d.ed;renderGiorni();return window.scrollTo(0,0)}
  if(d.ie){ui.inf=true;ui.ied=+d.ie;renderAltro();return window.scrollTo(0,0)}
  if(t.id==='ng'){ui.form=true;ui.ed=null;ui.fd=today().indexOf(cur)===0?today():cur+'-01';renderGiorni();return window.scrollTo(0,0)}
  if(t.id==='cg'){ui.form=false;ui.ed=null;return renderGiorni()}
- if(t.id==='dg'){if(confirm('Eliminare questo giorno?')){delete db.g[ui.ed];save();ui.form=false;ui.ed=null;renderGiorni()}return}
+ if(t.id==='dg'){if(confirm('Eliminare questo viaggio?')){db.g=db.g.filter(function(e){return e.id!==ui.ed});save();ui.form=false;ui.ed=null;renderGiorni()}return}
  if(t.id==='sg'){var dt=$('#fd').value;if(!dt)return toast('Scegli la data');var gd=$('#fgd').value.trim();
   if(gd&&!/^\d{1,2}:\d{2}$/.test(gd))return toast('Guida nel formato h:mm, es. 8:09');
-  if(db.g[dt]&&ui.ed!==dt&&!confirm('Esiste già un giorno con questa data. Sostituirlo?'))return;
-  var en={t:$('#ft').value.trim(),p:$('#fp').value.trim(),a:$('#fa').value.trim(),m:$('#fm').value.trim(),z:$('#fz').value.trim(),k:nv('fk'),i:$('#fi').value,o:$('#fo').value,nf:$('#fnf').checked,sp:nv('fsp'),n:$('#fn').value.trim(),gd:gd,pr:$('#fpr').checked};
-  if(ui.ed&&ui.ed!==dt)delete db.g[ui.ed];db.g[dt]=en;save();cur=dt.slice(0,7);ui.form=false;ui.ed=null;renderGiorni();return toast('Giorno salvato ✓')}
+  var en={id:ui.ed!=null?ui.ed:Date.now(),d:dt,t:$('#ft').value.trim(),p:$('#fp').value.trim(),a:$('#fa').value.trim(),m:$('#fm').value.trim(),z:$('#fz').value.trim(),k:nv('fk'),i:$('#fi').value,o:$('#fo').value,nf:$('#fnf').checked,sp:nv('fsp'),n:$('#fn').value.trim(),gd:gd,pr:$('#fpr').checked};
+  db.g=db.g.filter(function(e){return e.id!==en.id});db.g.push(en);save();cur=dt.slice(0,7);ui.form=false;ui.ed=null;renderGiorni();return toast('Salvato ✓')}
  if(t.id==='ni'){ui.inf=true;ui.ied=null;return renderAltro()}
  if(t.id==='ci'){ui.inf=false;ui.ied=null;return renderAltro()}
  if(t.id==='di'){if(confirm('Eliminare questa infrazione?')){db.inf=db.inf.filter(function(i){return i.id!==ui.ied});save();ui.inf=false;ui.ied=null;renderAltro()}return}
@@ -186,12 +187,11 @@ document.addEventListener('click',function(e){
  if(t.id==='ss'){var a=[1,2,3,4].map(function(i){return parseFloat($('#s'+i).value.replace(',','.'))});if(a.some(function(v){return !(v>=0)}))return toast('Controlla i valori');db.s={h168:a[0],notti:a[1],scad:a[2],prev:a[3]};save();return toast('Soglie salvate ✓')}
  if(t.id==='ex')return dl('backup_guida_'+today()+'.json','application/json',new Uint8Array(new TextEncoder().encode(JSON.stringify(db))));
  if(t.id==='im')return $('#fi2').click();
- if(t.id==='rs'&&confirm('Cancellare TUTTI i dati? Non si può annullare.')){db={g:{},inf:[],s:db.s};save();renderDati()}
+ if(t.id==='rs'&&confirm('Cancellare TUTTI i dati? Non si può annullare.')){db={g:[],inf:[],s:db.s};save();renderDati()}
 });
 document.addEventListener('change',function(e){
- if(e.target.id==='fd'){ui.fd=e.target.value;if(ui.fd)fillDay(ui.fd);return}
  if(e.target.id!=='fi2')return;var f=e.target.files[0];if(!f)return;var r=new FileReader();
- r.onload=function(){try{var x=JSON.parse(r.result);if(!x.g||!x.inf||!x.s)throw 0;if(confirm('Sostituire i dati attuali con il backup ('+Object.keys(x.g).length+' giorni)?')){db=x;save();renderDati();toast('Backup ripristinato')}}catch(er){toast('File non valido')}};r.readAsText(f);e.target.value='';
+ r.onload=function(){try{var x=norm(JSON.parse(r.result));if(!Array.isArray(x.g)||!x.inf||!x.s)throw 0;if(confirm('Sostituire i dati attuali con il backup ('+x.g.length+' viaggi)?')){db=x;save();renderDati();toast('Backup ripristinato')}}catch(er){toast('File non valido')}};r.readAsText(f);e.target.value='';
 });
 renderGiorni();
 </script></body></html>
